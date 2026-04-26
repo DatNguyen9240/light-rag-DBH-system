@@ -1,0 +1,12 @@
+{
+  "system_management_policy.md": [
+    "admin",
+    "patient"
+  ],
+  "hospital_rules_guide.md": [
+    "admin",
+    "patient",
+    "staff",
+    "doctor"
+  ]
+}
