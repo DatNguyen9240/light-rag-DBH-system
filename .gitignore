@@ -1,0 +1,18 @@
+# LightRAG runtime storage - auto-generated, do NOT commit
+knowledge_base/rag_storage_*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.env
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
