@@ -24,7 +24,10 @@ from lightrag.utils import EmbeddingFunc
 # --- SUPABASE CONFIGURATION ---
 
 
-API_KEY = "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"
+API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+if not API_KEY:
+    raise ValueError("Missing OPENAI_API_KEY or OPENROUTER_API_KEY in environment variables.")
+
 client = AsyncOpenAI(
     api_key=API_KEY,
     base_url="https://openrouter.ai/api/v1"
@@ -112,13 +115,6 @@ async def main():
                     m.update(f.read())
         current_hash = m.hexdigest()
         
-        if os.path.exists(storage_dir) and os.path.exists(hash_file):
-            with open(hash_file, 'r', encoding='utf-8') as f:
-                old_hash = f.read().strip()
-            if old_hash == current_hash:
-                print(f"[INDEX] Skipping [{role.upper()}] - No changes detected. Fast-forwarding!")
-                return
-
         # Note: Local storage_dir is kept just for the hash trackers and basic local state.
         # But Vector, KV, Graph are now isolated per Workspace prefix in Postgres.
         if not os.path.exists(storage_dir):

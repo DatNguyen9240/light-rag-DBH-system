@@ -35,9 +35,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize LLM Client
+api_key_env = os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+if not api_key_env:
+    raise ValueError("Missing OPENAI_API_KEY or OPENROUTER_API_KEY")
+
 client = AsyncOpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY", os.environ.get("OPENROUTER_API_KEY", "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")),
+    api_key=api_key_env,
     base_url="https://openrouter.ai/api/v1"
 )
 
