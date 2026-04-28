@@ -72,7 +72,8 @@ async def main():
         print(f"[INDEX] Note: Table drop skipped/failed: {e}")
 
     # Remove local tracking folders
-    base_dir = '/app/knowledge_base'
+    # Support both Docker (/app/knowledge_base) and local execution
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     import glob
     for p in glob.glob(os.path.join(base_dir, 'rag_storage_*')):
         try:
@@ -101,8 +102,8 @@ async def main():
 
     async def process_role(role):
         print(f"[INDEX] Processing Role: {role.upper()}")
-        storage_dir = f'/app/knowledge_base/rag_storage_{role}'
-        hash_file = f'/app/knowledge_base/rag_storage_{role}_hash_supabase.txt'
+        storage_dir = os.path.join(base_dir, f'rag_storage_{role}')
+        hash_file = os.path.join(base_dir, f'rag_storage_{role}_hash_supabase.txt')
         
         m = hashlib.md5()
         files_for_role = [f for f, roles in rbac_map.items() if role in roles]
