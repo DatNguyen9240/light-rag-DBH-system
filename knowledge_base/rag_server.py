@@ -102,7 +102,6 @@ def load_rags_dynamic():
                 embedding_func=EmbeddingFunc(
                     embedding_dim=1536,
                     max_token_size=8192,
-                    model_name="text-embedding-3-small",
                     func=embed_func
                 )
             )
