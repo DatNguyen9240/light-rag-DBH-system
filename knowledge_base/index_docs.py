@@ -126,10 +126,10 @@ async def main():
         
         # LIGHTRAG POSTGRESQL INITIALIZATION
         rag = LightRAG(
-            workspace=f"rag_{role}",       # Isolation wrapper: tables prefix on Postgres
-            working_dir=storage_dir,       # Fallback tracking folder
+            workspace=f"rag_{role}",
+            working_dir=storage_dir,
             kv_storage="PGKVStorage",
-            doc_status_storage="PGDocStatusStorage", # Add this to Ensure status syncs to Postgres
+            doc_status_storage="PGDocStatusStorage",
             vector_storage="PGVectorStorage",
             graph_storage="NetworkXStorage",
             addon_params={"postgresql_url": PG_URL},
@@ -137,6 +137,7 @@ async def main():
             embedding_func=EmbeddingFunc(
                 embedding_dim=1536,
                 max_token_size=8192,
+                model_name="text-embedding-3-small",
                 func=embed_func
             )
         )
