@@ -145,7 +145,7 @@ async def query_rag(request: QueryRequest):
             response = await rags[ns].aquery(namespaced_query, param=query_param)
         else:
             print(f"[MISSING NAMESPACE {ns.upper()}] No knowledge base found for this role.")
-            return {"response": "System Has No Knowledge DB for your role.", "answer": "System Has No Knowledge DB for your role."}
+            return {"response": "Hệ thống chưa có cơ sở dữ liệu tri thức cho phân quyền của bạn.", "answer": "Hệ thống chưa có cơ sở dữ liệu tri thức cho phân quyền của bạn."}
         return {"response": response, "answer": response}
     except Exception as e:
         print(f"ERROR: Query failed: {str(e)}")
@@ -204,7 +204,7 @@ def save_document(payload: DocumentPayload):
     with open(mappings_file, 'w', encoding='utf-8') as f:
         json.dump(rbac_map, f, ensure_ascii=False, indent=2)
 
-    return {"message": "Document saved successfully", "filename": filename}
+    return {"message": "Đã lưu tài liệu thành công", "filename": filename}
 
 @app.delete("/api/kb/documents/{filename}")
 def delete_document(filename: str):
@@ -222,7 +222,7 @@ def delete_document(filename: str):
             with open(mappings_file, 'w', encoding='utf-8') as f:
                 json.dump(rbac_map, f, ensure_ascii=False, indent=2)
 
-    return {"message": "Document deleted successfully"}
+    return {"message": "Đã xóa tài liệu thành công"}
 
 @app.post("/api/kb/reindex", status_code=200)
 async def trigger_reindex():
@@ -240,7 +240,7 @@ async def trigger_reindex():
         
         if process.returncode != 0:
             print(f"[REINDEX] Script Error: {process.stderr}")
-            raise HTTPException(status_code=500, detail=f"Reindex failed: {process.stderr}")
+            raise HTTPException(status_code=500, detail=f"Reindex thất bại: {process.stderr}")
             
         print(f"[REINDEX] Script success output loaded.")
         
