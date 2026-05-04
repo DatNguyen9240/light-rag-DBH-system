@@ -59,7 +59,7 @@ async def main():
         DO $$ DECLARE
             r RECORD;
         BEGIN
-            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename ILIKE 'rag_%') LOOP
+            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename ILIKE 'lightrag_%') LOOP
                 EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
             END LOOP;
         END $$;
