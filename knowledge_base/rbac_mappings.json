@@ -8,5 +8,9 @@
     "patient",
     "staff",
     "doctor"
+  ],
+  "insurance_policy.md": [
+    "admin",
+    "patient"
   ]
 }
