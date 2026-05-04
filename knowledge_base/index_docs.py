@@ -21,10 +21,11 @@ from openai import AsyncOpenAI
 from lightrag import LightRAG
 from lightrag.utils import EmbeddingFunc
 
-# --- SUPABASE CONFIGURATION ---
+from dotenv import load_dotenv
 
+load_dotenv()
 
-API_KEY = "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"
+API_KEY = os.environ.get("OPENAI_API_KEY", os.environ.get("OPENROUTER_API_KEY", ""))
 client = AsyncOpenAI(
     api_key=API_KEY,
     base_url="https://openrouter.ai/api/v1"
@@ -58,7 +59,7 @@ async def main():
         DO $$ DECLARE
             r RECORD;
         BEGIN
-            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename ILIKE 'lightrag_%') LOOP
+            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema() AND tablename ILIKE 'rag_%') LOOP
                 EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
             END LOOP;
         END $$;
