@@ -144,12 +144,8 @@ async def query_rag(request: QueryRequest):
             namespaced_query = f"[{ns}] {request.query}"
             response = await rags[ns].aquery(namespaced_query, param=query_param)
         else:
-            print(f"[MISSING NAMESPACE {ns.upper()}] Defaulting to 'patient'...")
-            fallback = 'patient' if 'patient' in rags else list(rags.keys())[0] if rags else None
-            if fallback:
-                response = await rags[fallback].aquery(request.query, param=query_param)
-            else:
-                return {"response": "System Has No Knowledge DB", "answer": "System Has No Knowledge DB"}
+            print(f"[MISSING NAMESPACE {ns.upper()}] No knowledge base found for this role.")
+            return {"response": "System Has No Knowledge DB for your role.", "answer": "System Has No Knowledge DB for your role."}
         return {"response": response, "answer": response}
     except Exception as e:
         print(f"ERROR: Query failed: {str(e)}")
