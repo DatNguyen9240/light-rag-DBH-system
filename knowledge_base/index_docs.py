@@ -57,7 +57,7 @@ async def main():
         kv_storage="PGKVStorage",
         doc_status_storage="PGDocStatusStorage",
         vector_storage="PGVectorStorage",
-        graph_storage="PGGraphStorage",
+        graph_storage="NetworkXStorage", # Reverted to local because Supabase lacks Apache AGE support
         addon_params={"postgresql_url": PG_URL},
         llm_model_func=dummy_llm,
         embedding_func=EmbeddingFunc(
