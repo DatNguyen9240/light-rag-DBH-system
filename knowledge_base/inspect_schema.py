@@ -15,7 +15,7 @@ async def inspect_schema():
         information_schema.columns 
     WHERE 
         table_schema = 'public' 
-        AND table_name ILIKE 'lightrag_%'
+        AND (table_name ILIKE 'lightrag_%' OR table_name ILIKE 'dbh_ehr_global_%')
     ORDER BY 
         table_name, ordinal_position;
     """
