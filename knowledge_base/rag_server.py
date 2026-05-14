@@ -1,31 +1,22 @@
 import os
 import json
 import asyncio
-import shutil
-
-# --- SUPABASE CONFIGURATION ---
-SUPABASE_PASSWORD = os.environ.get("SUPABASE_PASSWORD", "Datnguyenthanh1234")
-PG_URL = f"postgresql://postgres.dqdijzzdwscoivvqhspc:{SUPABASE_PASSWORD}@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres"
-
-os.environ["POSTGRES_URL"] = PG_URL
-os.environ["POSTGRES_URI"] = PG_URL
-os.environ["POSTGRES_USER"] = "postgres.dqdijzzdwscoivvqhspc"
-os.environ["POSTGRES_PASSWORD"] = SUPABASE_PASSWORD
-os.environ["POSTGRES_DATABASE"] = "postgres"
-os.environ["POSTGRES_HOST"] = "aws-1-ap-southeast-1.pooler.supabase.com"
-os.environ["POSTGRES_PORT"] = "5432"
-
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from openai import AsyncOpenAI
 from lightrag import LightRAG
 from lightrag.utils import EmbeddingFunc
 from lightrag.base import QueryParam
 
+# Import centralized config
+from config import (
+    PG_URL, WORKSPACE_NAME, RAG_PORT, OPENROUTER_API_KEY, 
+    DOCS_DIR, MAPPINGS_FILE, STORAGE_DIR
+)
 
-app = FastAPI(title="LightRAG DBH Server (Supabase Cloud Edition)")
+app = FastAPI(title="LightRAG DBH Server (Clean & Optimized)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,31 +28,25 @@ app.add_middleware(
 
 # Initialize LLM Client
 client = AsyncOpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY", os.environ.get("OPENROUTER_API_KEY", "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")),
+    api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1"
 )
 
-async def custom_llm_complete(prompt, system_prompt=None, history_messages=[], **kwargs):
+async def llm_complete_func(prompt, system_prompt=None, history_messages=[], **kwargs):
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.extend(history_messages)
     messages.append({"role": "user", "content": prompt})
 
-    allowed_params = ["temperature", "top_p", "n", "stream", "stop", "max_tokens",
-                      "presence_penalty", "frequency_penalty", "logit_bias", "user"]
-    openai_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
-
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,
-        **openai_kwargs
+        temperature=kwargs.get("temperature", 0),
     )
     return response.choices[0].message.content
 
-# Initialize API Embedding Model
-async def embed_func(texts):
-    # Call OpenRouter embeddings endpoint for ultra-fast API embedding
+async def embedding_func(texts):
     try:
         response = await client.embeddings.create(
             model="openai/text-embedding-3-small",
@@ -73,205 +58,136 @@ async def embed_func(texts):
         print(f"Embedding API Error: {e}")
         raise e
 
-# ── INITIALIZE SEPARATE RAG INSTANCES DYNAMICALLY ────────────────────
-rags = {}
-base_dir = '/app/knowledge_base'
-docs_dir = os.path.join(base_dir, 'docs')
-mappings_file = os.path.join(base_dir, 'rbac_mappings.json')
+# --- INITIALIZE SINGLE GLOBAL RAG INSTANCE ---
+# This reduces Supabase tables from 44+ down to just 11.
+os.makedirs(STORAGE_DIR, exist_ok=True)
+global_rag = LightRAG(
+    workspace=WORKSPACE_NAME,
+    working_dir=STORAGE_DIR,
+    kv_storage="PGKVStorage",
+    doc_status_storage="PGDocStatusStorage",
+    vector_storage="PGVectorStorage",
+    graph_storage="PGGraphStorage",
+    addon_params={"postgresql_url": PG_URL},
+    llm_model_func=llm_complete_func,
+    embedding_func=EmbeddingFunc(
+        embedding_dim=1536,
+        max_token_size=8192,
+        func=embedding_func
+    )
+)
 
-def load_rags_dynamic():
-    if not os.path.exists(base_dir):
-        return
-    for item in os.listdir(base_dir):
-        full_path = os.path.join(base_dir, item)
-        if os.path.isdir(full_path) and item.startswith('rag_storage_'):
-            role = item.split('rag_storage_')[1]
-            print(f"Loading dynamic role (Supabase): {role}")
-            rags[role] = LightRAG(
-                workspace=f"rag_{role}",       # Force prefix to map to Postgres tables
-                working_dir=full_path,
-                kv_storage="PGKVStorage",
-                doc_status_storage="PGDocStatusStorage",
-                vector_storage="PGVectorStorage",
-                graph_storage="NetworkXStorage",
-                addon_params={"postgresql_url": PG_URL},
-                llm_model_func=custom_llm_complete,
-                embedding_func=EmbeddingFunc(
-                    embedding_dim=1536,
-                    max_token_size=8192,
-                    func=embed_func
-                )
-            )
-
-load_rags_dynamic()
-
-# ── API MODELS ────────────────────
+# --- MODELS ---
 class QueryRequest(BaseModel):
     query: str
-    mode: str = "naive"   # naive = pure vector search, fastest for Q&A docs
-    namespace: str = None
+    mode: str = "naive"
+    namespace: str = "patient" # The Role (Admin/Patient/Doctor/Staff)
 
 class DocumentPayload(BaseModel):
     filename: str
     content: str
     roles: List[str]
 
-# ── ENDPOINTS ────────────────────
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
-
+# --- ENDPOINTS ---
 @app.on_event("startup")
 async def startup_event():
-    print(f"Initializing {len(rags)} Multi-tenant LightRAG Storages ({list(rags.keys())})...")
-    for role_name, rag_instance in rags.items():
-        await rag_instance.initialize_storages()
-    print("All LightRAG Storages Initialized")
+    print(f"Initializing Shared LightRAG Workspace: [{WORKSPACE_NAME}]...")
+    await global_rag.initialize_storages()
+    print("LightRAG Storage Initialized successfully.")
 
 @app.post("/query")
 async def query_rag(request: QueryRequest):
     try:
-        # FORCE NAIVE MODE: N8N still passes 'mode=hybrid', but hybrid fails
-        # because full entity creation takes too long via OpenRouter LLM.
-        # Naive mode (pure vector search) works instantly and reliably.
-        forced_mode = "naive"
-        query_param = QueryParam(mode=forced_mode)
-        ns = request.namespace.lower() if request.namespace else 'patient'
-
-        if ns in rags:
-            print(f"[{ns.upper()}] Querying RAG {ns.upper()} (mode={request.mode}) with: {request.query}")
-            # Namespace prefix busts cross-namespace LLM cache pollution
-            namespaced_query = f"[{ns}] {request.query}"
-            response = await rags[ns].aquery(namespaced_query, param=query_param)
-        else:
-            print(f"[MISSING NAMESPACE {ns.upper()}] No knowledge base found for this role.")
-            return {"response": "Hệ thống chưa có cơ sở dữ liệu tri thức cho phân quyền của bạn.", "answer": "Hệ thống chưa có cơ sở dữ liệu tri thức cho phân quyền của bạn."}
+        # Use 'naive' for speed or 'hybrid' for better quality
+        query_param = QueryParam(mode=request.mode)
+        
+        # Security: Prefix query with the role to guide the RAG to relevant chunks
+        role_prefix = request.namespace.upper()
+        namespaced_query = f"[{role_prefix}] {request.query}"
+        
+        print(f"Querying RAG (role={role_prefix}): {request.query}")
+        response = await global_rag.aquery(namespaced_query, param=query_param)
+        
         return {"response": response, "answer": response}
     except Exception as e:
-        print(f"ERROR: Query failed: {str(e)}")
+        print(f"Query Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── KNOWLEDGE MANAGEMENT ENDPOINTS ────────────────────
 @app.get("/api/kb/documents")
 def get_documents():
-    """List all documents and their roles"""
-    if not os.path.exists(mappings_file):
-        return []
-
-    with open(mappings_file, 'r', encoding='utf-8') as f:
+    if not os.path.exists(MAPPINGS_FILE): return []
+    with open(MAPPINGS_FILE, 'r', encoding='utf-8') as f:
         rbac_map = json.load(f)
 
     docs_list = []
     for filename, roles in rbac_map.items():
-        file_path = os.path.join(docs_dir, filename)
-        content = ""
-        size = 0
+        file_path = os.path.join(DOCS_DIR, filename)
         if os.path.exists(file_path):
-            size = os.path.getsize(file_path)
             with open(file_path, 'r', encoding='utf-8') as cf:
                 content = cf.read()
-
-        docs_list.append({
-            "filename": filename,
-            "roles": roles,
-            "sizeBytes": size,
-            "content": content
-        })
+            docs_list.append({
+                "filename": filename,
+                "roles": roles,
+                "sizeBytes": os.path.getsize(file_path),
+                "content": content
+            })
     return docs_list
 
 @app.post("/api/kb/documents")
 def save_document(payload: DocumentPayload):
-    """Create or update a document and its role mappings"""
-    os.makedirs(docs_dir, exist_ok=True)
-
-    # Save content to .md file
-    filename = payload.filename
-    if not filename.endswith(".md"):
-        filename += ".md"
-    file_path = os.path.join(docs_dir, filename)
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    filename = payload.filename if payload.filename.endswith(".md") else f"{payload.filename}.md"
+    file_path = os.path.join(DOCS_DIR, filename)
 
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(payload.content)
 
-    # Update mappings
     rbac_map = {}
-    if os.path.exists(mappings_file):
-        with open(mappings_file, 'r', encoding='utf-8') as f:
+    if os.path.exists(MAPPINGS_FILE):
+        with open(MAPPINGS_FILE, 'r', encoding='utf-8') as f:
             rbac_map = json.load(f)
-
     rbac_map[filename] = payload.roles
-
-    with open(mappings_file, 'w', encoding='utf-8') as f:
+    with open(MAPPINGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(rbac_map, f, ensure_ascii=False, indent=2)
 
-    return {"message": "Đã lưu tài liệu thành công", "filename": filename}
+    return {"message": "Document saved successfully", "filename": filename}
 
 @app.delete("/api/kb/documents/{filename}")
 def delete_document(filename: str):
-    """Delete a document and its role mapping"""
-    file_path = os.path.join(docs_dir, filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-    if os.path.exists(mappings_file):
-        with open(mappings_file, 'r', encoding='utf-8') as f:
+    file_path = os.path.join(DOCS_DIR, filename)
+    if os.path.exists(file_path): os.remove(file_path)
+    if os.path.exists(MAPPINGS_FILE):
+        with open(MAPPINGS_FILE, 'r', encoding='utf-8') as f:
             rbac_map = json.load(f)
-
         if filename in rbac_map:
             del rbac_map[filename]
-            with open(mappings_file, 'w', encoding='utf-8') as f:
+            with open(MAPPINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(rbac_map, f, ensure_ascii=False, indent=2)
+    return {"message": "Document deleted successfully"}
 
-    return {"message": "Đã xóa tài liệu thành công"}
-
-@app.post("/api/kb/reindex", status_code=200)
+@app.post("/api/kb/reindex")
 async def trigger_reindex():
-    """Synchronous reindex using fast index_docs script — wipes old storage for clean slate"""
-    import time
     import subprocess
-    
+    import time
     start_time = time.time()
     try:
-        print("[REINDEX] Starting fast synchronous reindex via index_docs.py...")
-        
-        # Run script
-        loop = asyncio.get_running_loop()
-        process = await loop.run_in_executor(None, lambda: subprocess.run(["python", "/app/knowledge_base/index_docs.py"], capture_output=True, text=True))
-        
+        # Run indexing script as a separate process
+        process = await asyncio.create_subprocess_exec(
+            "python", os.path.join(os.path.dirname(__file__), "index_docs.py"),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
         if process.returncode != 0:
-            print(f"[REINDEX] Script Error: {process.stderr}")
-            raise HTTPException(status_code=500, detail=f"Reindex thất bại: {process.stderr}")
-            
-        print(f"[REINDEX] Script success output loaded.")
+            raise Exception(stderr.decode())
+
+        # Reset global instance to clear in-memory caches
+        await global_rag.initialize_storages()
         
-        # Clear LightRAG shared in-memory state so old caches are wiped
-        try:
-            from lightrag.kg.shared_storage import global_kg_state
-            global_kg_state.clear()
-            print("[REINDEX] Emptied LightRAG shared_storage in-memory cache.")
-        except Exception as e:
-            print(f"[REINDEX] Note: shared_storage cache clear skipped/failed: {e}")
-            
-        # Re-initialize the dictionaries
-        global rags
-        rags.clear()
-        load_rags_dynamic()
-        
-        for role_name, rag_instance in rags.items():
-            await rag_instance.initialize_storages()
-        
-        print("[REINDEX] Complete! All documents indexed and ready to query.")
-        
-        elapsed_time = time.time() - start_time
-        return {
-            "message": f"✅ Hệ thống đã Reindex thành công ({elapsed_time:.1f}s)! Toàn bộ Chatbot đã cập nhật nội dung.",
-            "time_taken": elapsed_time
-        }
-        
+        elapsed = time.time() - start_time
+        return {"message": f"Reindex complete in {elapsed:.1f}s", "time_taken": elapsed}
     except Exception as e:
-        print(f"[REINDEX] Critical Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9621)
+    uvicorn.run(app, host="0.0.0.0", port=RAG_PORT)
