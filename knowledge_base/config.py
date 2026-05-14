@@ -8,7 +8,7 @@ load_dotenv()
 SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID", "dqdijzzdwscoivvqhspc")
 SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "Datnguyenthanh1234")
 # Use PG_URL directly if provided in .env, otherwise construct it
-PG_URL = os.getenv("PG_URL", f"postgresql://postgres.{SUPABASE_PROJECT_ID}:{SUPABASE_PASSWORD}@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres")
+PG_URL = os.getenv("PG_URL", f"postgresql://postgres.{SUPABASE_PROJECT_ID}:{SUPABASE_PASSWORD}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres")
 
 # --- RAG CONFIG ---
 # Use a SINGLE workspace to reduce tables from 44 down to 11

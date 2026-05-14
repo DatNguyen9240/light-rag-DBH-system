@@ -88,7 +88,7 @@ async def main():
             tagged_content = f"[{role_tag}]\n{content}"
             
             try:
-                await rag.ainsert(tagged_content, name=filename)
+                await rag.ainsert(tagged_content)
             except Exception as e:
                 print(f"Error inserting {filename}: {e}")
 
