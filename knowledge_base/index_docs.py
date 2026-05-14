@@ -80,19 +80,18 @@ async def main():
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        for role in roles:
-            role_tag = role.upper()
-            print(f"[INDEX] Inserting [{filename}] for Role: [{role_tag}]...")
-            
-            # Tagged content for "Soft RBAC" within a shared table
-            tagged_content = f"[{role_tag}]\n{content}"
-            
-            try:
-                await rag.ainsert(tagged_content)
-            except Exception as e:
-                print(f"Error inserting {filename}: {e}")
+        # Optimized: Combine all roles into a single header to save time and API costs
+        role_header = "[" + ", ".join([r.upper() for r in roles]) + "]"
+        print(f"[INDEX] Inserting [{filename}] for Roles: {role_header}...")
+        
+        tagged_content = f"{role_header}\n{content}"
+        
+        try:
+            await rag.ainsert(tagged_content)
+        except Exception as e:
+            print(f"Error inserting {filename}: {e}")
 
-    print("[INDEX] All documents indexed in shared workspace.")
+    print("[INDEX] All documents indexed efficiently in shared workspace.")
 
 if __name__ == "__main__":
     asyncio.run(main())
