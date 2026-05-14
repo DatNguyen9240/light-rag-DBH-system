@@ -87,7 +87,9 @@ async def main():
         tagged_content = f"{role_header}\n{content}"
         
         try:
-            await rag.ainsert(tagged_content, doc_id=filename)
+            # Include filename in content header since library doesn't support doc_id/name/metadata args
+            final_content = f"SOURCE: {filename}\n{tagged_content}"
+            await rag.ainsert(final_content)
         except Exception as e:
             print(f"Error inserting {filename}: {e}")
 
